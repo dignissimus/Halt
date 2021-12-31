@@ -103,6 +103,9 @@ arbitraryVariable = VariableExpression (Variable (Symbol "x"))
 eq3 :: Eq a => a -> a -> a -> Bool
 eq3 a b c = a == b && b == c
 
+eq4 :: Eq a => a-> a -> a -> a -> Bool
+eq4 a b c d = a == b && b == c && c == d
+
 -- Inference Rules
 type InferenceRule = Context -> [Entailment] -> Entailment
 
@@ -133,8 +136,9 @@ var _ _ = undefined
 
 -- (weak)
 {-
-- If it's known that ctx :- (A : B) and ctx :- (C : s) then
-  (x : C) :- A : B
+- 
+- If it's known that ctx :- (A : B) and ctx :- (C : s),
+- Then (x : C) :- A : B
 - 
 -}
 weak :: InferenceRule
@@ -145,3 +149,20 @@ weak ctx [gamma1 :- (a ::: b), gamma2 :- (c ::: Sort)] =
   else
     undefined
 weak _ _ = undefined 
+
+
+-- (conv)
+{- 
+ - Beta reduction/conversion rule for types
+ -
+ - If it's know that ctx :- (a :: b) and b' is a sort
+ - Then if, b == b' then a :: b'
+ -
+ -}
+conv :: InferenceRule
+conv ctx [gamma1 :- (a ::: b), gamma2 :- (b' ::: c), gamma3 :- (c' ::: Sort)] = 
+  if eq4 ctx gamma1 gamma2 gamma3 && TypeExpression b == b' then
+    ctx :- (a ::: b'')
+  else undefined
+  where b'' = retreiveType b'
+conv _ _ = undefined
