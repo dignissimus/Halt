@@ -7,20 +7,22 @@ module Lib
     ) where
 
 -- Basic Symbol declarations
-newtype Symbol = Symbol String
-newtype TypeIdentifier = TypeIdentifier Integer deriving (Eq)
+newtype Symbol = Symbol String deriving Eq
+newtype TypeIdentifier = TypeIdentifier Integer deriving Eq
 
 -- Variable definition
-newtype Variable = Variable Symbol -- TODO: Maybe variables should be indexed by integers
+newtype Variable = Variable Symbol deriving Eq -- TODO: Maybe variables should be indexed by integers
 
 -- Definition of types
 data SimpleType where
   SimpleType :: TypeIdentifier -> SimpleType
   TypeArrow :: SimpleType -> SimpleType -> SimpleType
+  deriving Eq
 
 data Kind where
   KindType :: Kind
   KindArrow :: Kind -> Kind -> Kind
+  deriving Eq
 
 data TypeOfKind where
   TypeOfKindType :: TypeOfKind
@@ -30,6 +32,7 @@ data InhabitableType where
   Kind :: Kind -> InhabitableType
   TypeOfKind :: InhabitableType
   Sort :: InhabitableType
+  deriving Eq
 
 data Value
 
@@ -53,34 +56,15 @@ data Expression where
   VariableExpression :: { variableVariable :: Variable } -> Expression
   -- TypeExpression :: Type --> Expression
   TypeExpression :: { typeType :: InhabitableType } -> Expression
+  deriving Eq
 
 -- Equality
 
-instance Eq SimpleType where
-  SimpleType x == SimpleType y = x == y
-  TypeArrow a b == TypeArrow c d = a == b && c==d
-  _ == _ = False
-
-instance Eq Kind where
-  KindType == KindType = True
-  KindArrow a b == KindArrow c d = a == b && c == d
-  _ == _ = False
-
-instance Eq Expression where
-  (TypeExpression a) == TypeExpression b  = a == b
-  _ == _ = False
-
-instance Eq InhabitableType where
-  Type a == Type b = a == b
-  Kind a == Kind b =  a == b
-  TypeOfKind == TypeOfKind = True
-  Sort == Sort = True
-  _ == _ = False
 
 -- Definition of Contexts
 -- data Declaration = Declaration Expression InhabitableType
 type Declaration = TrueJudgement
-data Context = Context { declarations :: [Declaration] } | Join { left :: Context, right :: Context }
+data Context = Context { declarations :: [Declaration] } | Join { left :: Context, right :: Context } deriving Eq
 
 -- Type Aliases
 -- type (:-) = Entails
@@ -104,7 +88,7 @@ pattern  a :+: b = Join a b
 -- Entailment Definition
 -- As a note, the program deals only with the type Entails Context (Judgement Expression InhabitableType)
 data a :- b = a :- b
-data Judgement a b = Judgement a b
+data Judgement a b = Judgement a b deriving Eq
 
 
 -- Utility functions
@@ -114,6 +98,10 @@ retreiveType _ = undefined
 
 arbitraryVariable :: Expression
 arbitraryVariable = VariableExpression (Variable (Symbol "x"))
+-- TODO: Check this actually works as an arbitrary variable
+
+eq3 :: Eq a => a -> a -> a -> Bool
+eq3 a b c = a == b && b == c
 
 -- Inference Rules
 type InferenceRule = Context -> [Entailment] -> Entailment
@@ -135,10 +123,25 @@ sort ctx _ = ctx :- Judgement (TypeExpression (Kind KindType)) TypeOfKind
 -}
 var :: InferenceRule
 var ctx [gamma1 :- (a ::: b), gamma2 :- (c ::: Sort)] =
-  if TypeExpression b == c then
+  if eq3 ctx gamma1 gamma2 && TypeExpression b == c then
     ctx :+: (Context {declarations = [arbitraryVariable ::: retreiveType a]})
       :- (arbitraryVariable ::: retreiveType a)
   else
       undefined
 
 var _ _ = undefined
+
+-- (weak)
+{-
+- If it's known that ctx :- (A : B) and ctx :- (C : s) then
+  (x : C) :- A : B
+- 
+-}
+weak :: InferenceRule
+weak ctx [gamma1 :- (a ::: b), gamma2 :- (c ::: Sort)] = 
+  if eq3 ctx gamma1 gamma2 then
+    ctx :+: (Context {declarations = [arbitraryVariable ::: retreiveType c]})
+      :- (a ::: b)
+  else
+    undefined
+weak _ _ = undefined 
