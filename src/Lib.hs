@@ -184,7 +184,6 @@ weak ctx [gamma1 :- (a ::: b), gamma2 :- (c ::: TypeExpression Sort)] =
     undefined
 weak _ _ = undefined
 
-
 -- (conv)
 {- 
  - Beta reduction/conversion rule for types
@@ -194,6 +193,7 @@ weak _ _ = undefined
  -
  -}
 conv :: InferenceRule
+<<<<<<< HEAD
 conv ctx [gamma1 :- (a ::: b), gamma2 :- (b' ::: c)] =
   if eq3 ctx gamma1 gamma2 && b == b' && isSort ctx c then
     ctx :- (a ::: b')
@@ -213,3 +213,11 @@ form ctx [gamma1 :- (a ::: TypeExpression (Kind KindType)), (Enhance gamma2 a') 
   else
     undefined
 form _ _ = undefined
+=======
+conv ctx [gamma1 :- (a ::: b), gamma2 :- (b' ::: c), gamma3 :- (c' ::: Sort)] = 
+  if eq4 ctx gamma1 gamma2 gamma3 && TypeExpression b == b' then
+    ctx :- (a ::: b'')
+  else undefined
+  where b'' = retreiveType b'
+conv _ _ = undefined
+>>>>>>> refs/remotes/origin/master
