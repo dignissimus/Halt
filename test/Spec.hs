@@ -23,10 +23,10 @@ assertEqual x y = (x == y) || error "Assertion failed"
 productTypeIsASort :: Context -> Entailment
 productTypeIsASort ctx = proofProductTypeIsASort
     where
-        kindIsSort = sort ctx []
-        assumptionThatAIsKind = Enhance ctx (TypeExpression (Kind KindType))
-        aIsKind = var ctx [kindIsSort]
-        kindIsSort' = weak ctx [kindIsSort, aIsKind]
-        assumptionThatXHasTypeA = Enhance ctx (materialise assumptionThatAIsKind)
-        kindIsSort'' = weak  ctx [kindIsSort'', popEntailment assumptionThatXHasTypeA]
-        proofProductTypeIsASort = form ctx [aIsKind, kindIsSort'']
+        !kindIsSort = sort ctx []
+        !assumptionThatAIsKind = enhance ctx (TypeExpression (Kind KindType))
+        !aIsKind = var ctx [kindIsSort]
+        !kindIsSort' = weak ctx [kindIsSort, aIsKind]
+        !assumptionThatXHasTypeA = enhance ctx (materialise assumptionThatAIsKind)
+        !kindIsSort'' = weak  ctx [kindIsSort', popEntailment assumptionThatXHasTypeA]
+        !proofProductTypeIsASort = form ctx [aIsKind, kindIsSort'']

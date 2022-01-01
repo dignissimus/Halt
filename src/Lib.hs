@@ -5,29 +5,29 @@
 module Lib where
 
 -- Basic Symbol declarations
-newtype Symbol = Symbol String deriving Eq
-newtype TypeIdentifier = TypeIdentifier Integer deriving Eq
+newtype Symbol = Symbol String deriving (Eq, Show)
+newtype TypeIdentifier = TypeIdentifier Integer deriving (Eq, Show)
 
 -- Variable definition
-data Variable = Variable Symbol | ArbitraryVariable deriving Eq -- TODO: Maybe variables should be indexed by integers
+data Variable = Variable Symbol | ArbitraryVariable Int deriving (Eq, Show) -- TODO: Maybe variables should be indexed by integers
 
 -- Definition of types
 data SimpleType where
   SimpleType :: TypeIdentifier -> SimpleType
   TypeArrow :: SimpleType -> SimpleType -> SimpleType
-  deriving Eq
+  deriving (Eq, Show)
 
 data Kind where
   KindType :: Kind
   KindArrow :: Kind -> Kind -> Kind
-  deriving Eq
+  deriving (Eq, Show)
 
 data InhabitableType where
   Type :: SimpleType -> InhabitableType
   Kind :: Kind -> InhabitableType
   Sort :: InhabitableType
   ProductType :: Expression -> Expression -> InhabitableType
-  deriving Eq
+  deriving (Eq, Show)
 
 data Value
 
@@ -50,7 +50,7 @@ data Expression where
   VariableExpression :: { variableVariable :: Variable } -> Expression
   -- TypeExpression :: Type --> Expression
   TypeExpression :: { typeType :: InhabitableType } -> Expression
-  deriving Eq
+  deriving (Eq, Show)
 
 -- Equality
 
@@ -58,7 +58,7 @@ data Expression where
 -- Definition of Contexts
 -- data Declaration = Declaration Expression InhabitableType
 type Declaration = TrueJudgement
-data Context = Context { declarations :: [Declaration] } | Join { left :: Context, right :: Context } deriving Eq
+data Context = Context { declarations :: [Declaration] } | Join { left :: Context, right :: Context } deriving (Eq, Show)
 
 -- Type Aliases
 -- type (:-) = Entails
@@ -70,8 +70,8 @@ pattern  a ::: b = Judgement a b
 type TrueJudgement = Judgement Expression Expression
 type Entailment = Context :- TrueJudgement
 
-data a :- b = a :- b deriving Eq
-data Judgement a b = Judgement a b deriving Eq
+data a :- b = a :- b deriving (Eq, Show)
+data Judgement a b = Judgement a b deriving (Eq, Show)
 
 -- Constructor Synonyms
 entails :: a -> b -> a :- b
@@ -83,22 +83,43 @@ pattern  a :+: b = Join a b
 pattern (:-->) :: Expression -> Expression -> InhabitableType
 pattern a :--> b = ProductType a b
 
+pattern EmptyContext :: Context
+pattern EmptyContext = Context {declarations = []}
+
+pattern BaseContext :: [Declaration] -> Context
+pattern BaseContext d = Context d
+
 -- Utility functions
 retreiveType :: Expression -> InhabitableType
 retreiveType (TypeExpression t) = t
 retreiveType _ = undefined
 
 {- TODO: Check this actually works as an arbitrary variable -}
-arbitraryVariable :: Expression
-arbitraryVariable = VariableExpression ArbitraryVariable -- (Variable (Symbol "x"))
+arbitraryVariable :: Context -> Expression
+arbitraryVariable = VariableExpression . nextArbitraryVariable -- (Variable (Symbol "x"))
+
+nextArbitraryVariable :: Context -> Variable
+nextArbitraryVariable ctx = ArbitraryVariable (nextArbitraryIdentifier ctx)
+
+nextArbitraryIdentifier :: Context -> Int -- TODO: Serious fixing
+nextArbitraryIdentifier (Context d) = maximum (idents d) + 1
+nextArbitraryIdentifier (Join left right) = max (nextArbitraryIdentifier left) (nextArbitraryIdentifier right) + 1
+
+idents :: [Declaration] -> [Int]
+idents [] = [0]
+idents ((Judgement x y):xs) = ident x : ident y : idents xs
+
+ident :: Expression -> Int
+ident (VariableExpression (ArbitraryVariable n)) = n
+ident _ = 0
 
 {-
  - Introduces an arbitrary variable with a given type into a context
  - 
 -}
 
-pattern Enhance :: Context -> Expression -> Context
-pattern Enhance ctx t = ctx :+: Context {declarations = [VariableExpression ArbitraryVariable ::: t]}
+pattern Enhance :: Context -> Int -> Expression -> Context
+pattern Enhance ctx n t = ctx :+: Context {declarations = [VariableExpression (ArbitraryVariable n) ::: t]}
 
 eq3 :: Eq a => a -> a -> a -> Bool
 eq3 a b c = a == b && b == c
@@ -119,8 +140,8 @@ popEntailment ctx = ctx :- pop ctx
 
 materialise :: Context -> Expression
 materialise ctx = case pop ctx of
-  VariableExpression ArbitraryVariable ::: t -> VariableExpression ArbitraryVariable
-  _ -> undefined 
+  VariableExpression (ArbitraryVariable n) ::: t -> VariableExpression (ArbitraryVariable n)
+  _ -> undefined
 
 
 {-
@@ -131,6 +152,9 @@ materialise ctx = case pop ctx of
 find :: Context -> TrueJudgement -> Bool
 find Context {declarations = declarations} judgement = judgement `elem` declarations
 find (Join left right) judgement = find left judgement || find right judgement
+
+enhance :: Context -> Expression -> Context
+enhance ctx = Enhance ctx (nextArbitraryIdentifier ctx)
 
 -- Inference Rules
 type InferenceRule = Context -> [Entailment] -> Entailment
@@ -163,7 +187,7 @@ sort ctx _ = ctx :- Judgement (TypeExpression (Kind KindType)) (TypeExpression S
 var :: InferenceRule
 var ctx [gamma1 :- (a ::: b)] =
   if ctx == gamma1 && isSort ctx b then
-      Enhance ctx a :- (arbitraryVariable ::: a)
+      enhance ctx a :- (arbitraryVariable ctx ::: a)
   else
       undefined
 
@@ -176,10 +200,10 @@ var _ _ = undefined
 - Then (x : C) :- A : B
 - 
 -}
-weak :: InferenceRule
-weak ctx [gamma1 :- (a ::: b), gamma2 :- (c ::: TypeExpression Sort)] =
-  if eq3 ctx gamma1 gamma2 then
-    Enhance ctx c :- (a ::: b)
+weak :: InferenceRule -- Check reference, second argument may differ
+weak ctx [gamma1 :- (a ::: b), (Enhance gamma2 n t) :- (c ::: s)] =
+  if eq3 ctx gamma1 gamma2 && isSort ctx s then
+    enhance ctx c :- (a ::: b)
   else
     undefined
 weak _ _ = undefined
@@ -207,7 +231,7 @@ conv _ _ = undefined
  - Then ctx :- (A --> B) : s
  -}
 form :: InferenceRule
-form ctx [gamma1 :- (a ::: TypeExpression (Kind KindType)), (Enhance gamma2 a') :- (b ::: c)] =
+form ctx [gamma1 :- (a ::: TypeExpression (Kind KindType)), (Enhance gamma2 n a') :- (b ::: c)] =
   if eq3 ctx gamma1 gamma2 && a == a' && isSort ctx c then
     ctx :- (TypeExpression (a' :--> b) ::: c)
   else
